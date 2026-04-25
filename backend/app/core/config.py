@@ -25,6 +25,21 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
 
+    @property
+    def database_url(self) -> str:
+        """Normalize DATABASE_URL so paste-from-Neon/Render works without edits.
+
+        - postgres://...        -> postgresql+psycopg://...
+        - postgresql://...      -> postgresql+psycopg://...
+        - postgresql+psycopg2://... left alone (legacy driver users opt in)
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql+psycopg://" + url[len("postgres://") :]
+        elif url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url[len("postgresql://") :]
+        return url
+
 
 @lru_cache
 def get_settings() -> Settings:

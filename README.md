@@ -6,6 +6,7 @@ Bloom は、ユーザがデータをアップロードして用途を選ぶだ�
 作成・利用・共有できる、ノーコード AI 作成インターフェースです。
 
 PRD: [docs/PRD.md](docs/PRD.md)
+無料デプロイ手順: [docs/DEPLOY.md](docs/DEPLOY.md)
 
 ## 構成
 
