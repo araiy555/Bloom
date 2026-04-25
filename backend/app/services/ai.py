@@ -6,7 +6,10 @@ MVP can still run end-to-end during local development.
 
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
+import os
 from typing import Iterable
 
 from app.core.config import get_settings
@@ -80,6 +83,106 @@ def _anthropic_chat(messages: list[dict], *, json_mode: bool) -> str:
         if getattr(block, "type", None) == "text":
             parts.append(block.text)
     return "".join(parts)
+
+
+# ----- Image understanding -----
+
+DEFAULT_VISION_PROMPT = (
+    "この画像に何が写っているか、内容・特徴・スタイル・読み取れる文字などを"
+    "日本語で5〜10行程度で簡潔に説明してください。"
+    "後で別のAIがこの説明文だけを読んで画像内容を把握できるよう、具体的に書いてください。"
+)
+
+VISION_MIME_FALLBACK = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+}
+
+
+def describe_image(file_path: str, prompt: str = DEFAULT_VISION_PROMPT) -> str:
+    """Generate a Japanese description of an image using a vision-capable model.
+
+    Returns an empty string if no key is configured or the call fails — callers
+    can treat that as "no description available".
+    """
+    try:
+        if not os.path.exists(file_path):
+            return ""
+        mime, _ = mimetypes.guess_type(file_path)
+        if not mime:
+            ext = os.path.splitext(file_path)[1].lower()
+            mime = VISION_MIME_FALLBACK.get(ext)
+        if not mime or not mime.startswith("image/"):
+            return ""
+        with open(file_path, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode("ascii")
+
+        provider = settings.DEFAULT_PROVIDER
+        if provider == "anthropic" and settings.ANTHROPIC_API_KEY:
+            return _anthropic_describe(b64, mime, prompt)
+        if provider == "openai" and settings.OPENAI_API_KEY:
+            return _openai_describe(b64, mime, prompt)
+        if settings.OPENAI_API_KEY:
+            return _openai_describe(b64, mime, prompt)
+        if settings.ANTHROPIC_API_KEY:
+            return _anthropic_describe(b64, mime, prompt)
+        return ""
+    except Exception:
+        return ""
+
+
+def _openai_describe(b64: str, mime: str, prompt: str) -> str:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    resp = client.chat.completions.create(
+        model=settings.DEFAULT_OPENAI_MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{b64}"},
+                    },
+                ],
+            }
+        ],
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
+def _anthropic_describe(b64: str, mime: str, prompt: str) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+    resp = client.messages.create(
+        model=settings.DEFAULT_ANTHROPIC_MODEL,
+        max_tokens=1024,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": mime, "data": b64},
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+    )
+    parts: list[str] = []
+    for block in resp.content:
+        if getattr(block, "type", None) == "text":
+            parts.append(block.text)
+    return "".join(parts).strip()
 
 
 def build_rag_context(file_excerpts: Iterable[tuple[str, str]], max_chars: int = 6000) -> str:

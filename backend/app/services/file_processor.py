@@ -38,9 +38,21 @@ def _truncate(text: str) -> str:
 
 
 def extract_text(kind: FileKind, file_path: str) -> str:
-    """Extract a small preview of text content for RAG context. Best-effort."""
+    """Extract a small preview of text content for RAG context. Best-effort.
+
+    For images, this calls the vision model to generate a Japanese description
+    so downstream chat can reason about visual content.
+    """
 
     try:
+        if kind == FileKind.IMAGE:
+            from app.services.ai import describe_image
+
+            desc = describe_image(file_path)
+            if desc:
+                return f"[画像の自動説明]\n{desc}"
+            return ""
+
         if kind == FileKind.TEXT:
             with open(file_path, "r", encoding="utf-8", errors="replace") as f:
                 return _truncate(f.read())
