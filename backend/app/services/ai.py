@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import mimetypes
 import os
 from typing import Iterable
@@ -201,6 +202,52 @@ def build_rag_context(file_excerpts: Iterable[tuple[str, str]], max_chars: int =
         out.append(block)
         used += len(block)
     return "".join(out)
+
+
+# ----- Embeddings + retrieval -----
+
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_BATCH = 64
+
+
+def embeddings_available() -> bool:
+    return bool(settings.OPENAI_API_KEY)
+
+
+def embed_texts(texts: list[str]) -> list[list[float]] | None:
+    """Generate embeddings for a list of strings.
+
+    Returns None if no embedding provider is configured (caller should fall
+    back to non-vector behavior). Returns [] for empty input.
+    """
+    if not embeddings_available():
+        return None
+    if not texts:
+        return []
+    from openai import OpenAI
+
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
+    out: list[list[float]] = []
+    for i in range(0, len(texts), EMBEDDING_BATCH):
+        batch = texts[i : i + EMBEDDING_BATCH]
+        resp = client.embeddings.create(model=EMBEDDING_MODEL, input=batch)
+        out.extend([d.embedding for d in resp.data])
+    return out
+
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    if not a or not b:
+        return 0.0
+    dot = 0.0
+    na = 0.0
+    nb = 0.0
+    for x, y in zip(a, b):
+        dot += x * y
+        na += x * x
+        nb += y * y
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
 
 
 def assist_report(project_label: str, goal: str, file_summaries: list[dict]) -> dict:

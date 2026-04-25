@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.models import ChatMessage, MessageRole, Project, User
 from app.models.project import ProjectStatus
 from app.schemas.chat import AssistReport, ChatMessageOut, ChatRequest, ChatResponse
-from app.services import ai
+from app.services import ai, rag
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["chat"])
 
@@ -51,7 +51,9 @@ def _file_inventory(project: Project) -> str:
     return "\n".join(lines)
 
 
-def _build_messages(project: Project, history: list[ChatMessage], user_msg: str) -> list[dict]:
+def _build_messages(
+    project: Project, history: list[ChatMessage], user_msg: str, db: Session
+) -> list[dict]:
     base = (project.system_prompt or "").strip() or INTERVIEWER_PROMPT
 
     sections: list[str] = [base]
@@ -59,10 +61,17 @@ def _build_messages(project: Project, history: list[ChatMessage], user_msg: str)
         sections.append(f"ユーザが宣言した目的: {project.goal}")
     sections.append(DATA_INVENTORY_HEADER + "\n" + _file_inventory(project))
 
-    excerpts = [(f.filename, f.extracted_text or "") for f in project.files]
-    context = ai.build_rag_context(excerpts)
+    # Vector retrieval first; fall back to concat-of-extracted-text if there are
+    # no embedded chunks (no provider configured, or files predate indexing).
+    context = ""
+    retrieved = rag.search(db, project.id, user_msg)
+    if retrieved:
+        context = rag.build_context(retrieved)
+    if not context:
+        excerpts = [(f.filename, f.extracted_text or "") for f in project.files]
+        context = ai.build_rag_context(excerpts)
     if context:
-        sections.append("以下はファイルの中身の抜粋です。回答の根拠として使ってください:\n" + context)
+        sections.append("以下はデータセットの該当箇所です。回答の根拠として使ってください:\n" + context)
 
     system = "\n\n".join(sections)
     messages: list[dict] = [{"role": "system", "content": system}]
@@ -98,7 +107,7 @@ def chat(
     if not project.goal and not any(m.role == MessageRole.USER.value for m in history):
         project.goal = payload.message.strip()[:500]
 
-    messages = _build_messages(project, history, payload.message)
+    messages = _build_messages(project, history, payload.message, db)
     reply = ai.chat(messages)
 
     user_record = ChatMessage(

@@ -15,7 +15,28 @@ CSV_EXT = {".csv", ".tsv"}
 EXCEL_EXT = {".xls", ".xlsx"}
 TEXT_EXT = {".txt", ".md", ".json", ".log"}
 
-MAX_PREVIEW_CHARS = 4000
+MAX_PREVIEW_CHARS = 200_000  # generous cap for full-document indexing
+CHUNK_CHARS = 800
+CHUNK_OVERLAP = 100
+
+
+def chunk_text(text: str, chunk_size: int = CHUNK_CHARS, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """Split text into roughly fixed-size, overlapping chunks for embedding."""
+    if not text:
+        return []
+    text = text.strip()
+    if len(text) <= chunk_size:
+        return [text]
+    chunks: list[str] = []
+    start = 0
+    n = len(text)
+    while start < n:
+        end = min(start + chunk_size, n)
+        chunks.append(text[start:end])
+        if end >= n:
+            break
+        start = max(end - overlap, start + 1)
+    return chunks
 
 
 def classify(filename: str) -> FileKind:
@@ -61,10 +82,8 @@ def extract_text(kind: FileKind, file_path: str) -> str:
             with open(file_path, "r", encoding="utf-8", errors="replace", newline="") as f:
                 reader = csv.reader(f)
                 rows: list[str] = []
-                for i, row in enumerate(reader):
+                for row in reader:
                     rows.append(", ".join(row))
-                    if i >= 50:
-                        break
                 return _truncate("\n".join(rows))
 
         if kind == FileKind.PDF:
@@ -73,9 +92,7 @@ def extract_text(kind: FileKind, file_path: str) -> str:
 
                 reader = PdfReader(file_path)
                 pages: list[str] = []
-                for i, page in enumerate(reader.pages):
-                    if i >= 5:
-                        break
+                for page in reader.pages:
                     try:
                         pages.append(page.extract_text() or "")
                     except Exception:
@@ -90,12 +107,10 @@ def extract_text(kind: FileKind, file_path: str) -> str:
 
                 wb = load_workbook(file_path, read_only=True, data_only=True)
                 lines: list[str] = []
-                for sheet in wb.sheetnames[:3]:
+                for sheet in wb.sheetnames:
                     ws = wb[sheet]
                     lines.append(f"# Sheet: {sheet}")
-                    for i, row in enumerate(ws.iter_rows(values_only=True)):
-                        if i >= 50:
-                            break
+                    for row in ws.iter_rows(values_only=True):
                         lines.append(", ".join("" if v is None else str(v) for v in row))
                 return _truncate("\n".join(lines))
             except Exception:

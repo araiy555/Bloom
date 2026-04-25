@@ -9,7 +9,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.models import DatasetFile, Project, User
 from app.schemas.dataset import DatasetFileOut
-from app.services import file_processor
+from app.services import file_processor, rag
 
 settings = get_settings()
 router = APIRouter(prefix="/projects/{project_id}/files", tags=["datasets"])
@@ -71,7 +71,36 @@ async def upload_file(
     db.add(record)
     db.commit()
     db.refresh(record)
+
+    # Chunk + embed in the background of the request. Failures are non-fatal:
+    # chat falls back to non-vector context if no chunks are stored.
+    try:
+        rag.index_file(db, record)
+    except Exception:
+        db.rollback()
+
     return _to_out(record)
+
+
+@router.post("/reindex", status_code=status.HTTP_200_OK)
+def reindex_files(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+) -> dict:
+    """Re-chunk + re-embed all files in this project.
+
+    Useful after the embedding API key is added or when the chunking strategy
+    changes. No-op chunks if no embedding provider is configured.
+    """
+    project = _get_owned_project(db, current, project_id)
+    total = 0
+    for f in project.files:
+        try:
+            total += rag.index_file(db, f)
+        except Exception:
+            db.rollback()
+    return {"file_count": len(project.files), "chunk_count": total}
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)

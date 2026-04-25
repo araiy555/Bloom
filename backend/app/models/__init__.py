@@ -1,6 +1,6 @@
 from app.models.user import User
 from app.models.project import Project, ProjectStatus
-from app.models.dataset import DatasetFile, FileKind
+from app.models.dataset import DatasetFile, DatasetChunk, FileKind
 from app.models.message import ChatMessage, MessageRole
 
 __all__ = [
@@ -8,6 +8,7 @@ __all__ = [
     "Project",
     "ProjectStatus",
     "DatasetFile",
+    "DatasetChunk",
     "FileKind",
     "ChatMessage",
     "MessageRole",

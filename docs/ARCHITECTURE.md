@@ -37,6 +37,8 @@
 - **Project**: id, owner_id, name, status, goal, system_prompt
   （プロジェクトに固定タイプ列挙は持たせない。あらゆる用途に同じスキーマで対応する）
 - **DatasetFile**: id, project_id, filename, kind, size_bytes, storage_path, extracted_text
+- **DatasetChunk**: id, project_id, file_id, chunk_index, text, embedding(JSON)
+  — RAG 用に分割＋埋め込みを保存。Postgres でも SQLite でも動くよう JSON Text 列で保持
 - **ChatMessage**: id, project_id, role, content
 
 ## AI 戦略（MVP）
@@ -56,7 +58,16 @@
 - **画像対応**: アップロード時に Vision API（OpenAI / Anthropic）で日本語の説明文を
   自動生成し、`extracted_text` に保存。テキスト抜粋と同じ経路で RAG 文脈に注入されるため、
   画像も含めて「あらゆるパターン」のデータを 1 つのチャットでハンドリングできる。
-- 大規模埋め込み・ベクター DB は将来導入（pgvector / Qdrant 等）
+- **ベクター検索 RAG**: アップロード時に extracted_text を 800 文字チャンクに分割し、
+  OpenAI の text-embedding-3-small で埋め込みを生成して `dataset_chunks` に保存。
+  チャット時は質問文をクエリベクトルにして cosine 類似度で top-k のチャンクを取得し、
+  該当箇所だけをシステムプロンプトに注入する。これによりファイル数が増えても
+  プロンプト長が破綻しない。
+- **フォールバック**: 埋め込みプロバイダ未設定の場合は従来の「extracted_text を全部
+  連結」方式で動作するため、APIキー無しでも MVP は止まらない。
+- **再インデックス**: `POST /api/projects/{id}/files/reindex` で全ファイルを
+  チャンク + 埋め込み再生成。後から API キーを追加した場合などに使う。
+- 将来的には JSON 列の代わりに pgvector の vector 型に差し替え可能（API は変えずに済む）
 
 ## エンドポイント
 
@@ -71,6 +82,7 @@
 | ファイル一覧 | GET | `/api/projects/{id}/files` |
 | ファイルアップロード | POST | `/api/projects/{id}/files` |
 | ファイル削除 | DELETE | `/api/projects/{id}/files/{file_id}` |
+| 全ファイル再インデックス | POST | `/api/projects/{id}/files/reindex` |
 | メッセージ履歴 | GET | `/api/projects/{id}/messages` |
 | チャット送信 | POST | `/api/projects/{id}/chat` |
 | AIアシスト診断 | POST | `/api/projects/{id}/assist` |
