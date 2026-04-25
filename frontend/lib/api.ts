@@ -52,9 +52,8 @@ export type User = { id: number; email: string; name: string };
 export type Project = {
   id: number;
   name: string;
-  type: "manga" | "excel" | "sales" | "other" | string;
-  status: "draft" | "training" | "ready" | string;
-  purpose: string;
+  status: "draft" | "ready" | string;
+  goal: string;
   system_prompt: string;
   created_at: string;
   updated_at: string;

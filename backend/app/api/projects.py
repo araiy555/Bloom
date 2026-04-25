@@ -3,10 +3,20 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.models import Project, User
+from app.models import ChatMessage, MessageRole, Project, User
 from app.schemas.project import ProjectCreate, ProjectOut, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+WELCOME_MESSAGE = (
+    "こんにちは！🌱 これからあなた専用のAIを一緒に作っていきます。\n\n"
+    "まず教えてください — **どんなことができるAIがほしいですか？**\n\n"
+    "例:\n"
+    "・お客さんからの問い合わせに自動で返事してほしい\n"
+    "・社内ルールについて答えてくれるAIがほしい\n"
+    "・写真を見て商品の説明文を書いてほしい\n\n"
+    "やりたいことを自由に書いてもらえれば、必要なデータを順番にお願いしていきます。"
+)
 
 
 def _to_out(project: Project) -> ProjectOut:
@@ -41,13 +51,15 @@ def create_project(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ) -> ProjectOut:
-    project = Project(
-        owner_id=current.id,
-        name=payload.name,
-        type=payload.type.value,
-        purpose=payload.purpose,
-    )
+    project = Project(owner_id=current.id, name=payload.name)
     db.add(project)
+    db.flush()
+    greeting = ChatMessage(
+        project_id=project.id,
+        role=MessageRole.ASSISTANT.value,
+        content=WELCOME_MESSAGE,
+    )
+    db.add(greeting)
     db.commit()
     db.refresh(project)
     return _to_out(project)

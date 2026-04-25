@@ -2,19 +2,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.models.project import ProjectStatus, ProjectType
+from app.models.project import ProjectStatus
 
 
 class ProjectCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    type: ProjectType = ProjectType.OTHER
-    purpose: str = ""
+    name: str = Field(default="新しいAI", min_length=1, max_length=120)
 
 
 class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    type: ProjectType | None = None
-    purpose: str | None = None
+    goal: str | None = None
     system_prompt: str | None = None
     status: ProjectStatus | None = None
 
@@ -22,9 +19,8 @@ class ProjectUpdate(BaseModel):
 class ProjectOut(BaseModel):
     id: int
     name: str
-    type: str
     status: str
-    purpose: str
+    goal: str
     system_prompt: str
     created_at: datetime
     updated_at: datetime

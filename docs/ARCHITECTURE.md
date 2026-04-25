@@ -34,16 +34,25 @@
 ## データモデル
 
 - **User**: id, email, name, hashed_password
-- **Project**: id, owner_id, name, type, status, purpose, system_prompt
+- **Project**: id, owner_id, name, status, goal, system_prompt
+  （プロジェクトに固定タイプ列挙は持たせない。あらゆる用途に同じスキーマで対応する）
 - **DatasetFile**: id, project_id, filename, kind, size_bytes, storage_path, extracted_text
 - **ChatMessage**: id, project_id, role, content
 
 ## AI 戦略（MVP）
 
-PRD の「学習方式（抽象化）」の方針に沿い、ユーザにはモデル選択を見せません。
+固定の「タイプ選択」を廃止。代わりに **対話型オンボーディング**で AI 側がユーザに必要な
+ものを聞き出し、データ集めから稼働までを 1 つのチャットで完結させる。
 
-- 取り込み時に PDF / CSV / Excel / テキストから本文抜粋を抽出して保存
-- チャット時に抜粋を**システムプロンプトに連結（軽量 RAG）**
+- プロジェクト作成時に「アシスタントからの最初の挨拶」を 1 件シード（`api/projects.py`）
+- チャット時のシステムプロンプトは `INTERVIEWER_PROMPT` をベースに、
+  + `goal`（最初のユーザ発言から自動キャプチャ）
+  + 現在のファイルインベントリ
+  + 既存ファイルの抽出本文（軽量 RAG）
+  を毎回注入する（`api/chat.py`）
+- ファイルのアップロードは UI 側でチャットへの D&D / 添付ボタンから可能。
+  アップロード成功時に「〜をアップロードしました」というユーザメッセージを自動送信し、
+  AI が次の指示を返せる流れにしている。
 - 画像・大規模埋め込み・ベクター DB は将来導入（pgvector / Qdrant 等）
 
 ## エンドポイント

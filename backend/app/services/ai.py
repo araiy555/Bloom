@@ -100,7 +100,7 @@ def build_rag_context(file_excerpts: Iterable[tuple[str, str]], max_chars: int =
     return "".join(out)
 
 
-def assist_report(project_type: str, purpose: str, file_summaries: list[dict]) -> dict:
+def assist_report(project_label: str, goal: str, file_summaries: list[dict]) -> dict:
     """Ask the model to produce a structured assist report.
 
     Returns a dict with classification / quality_score / feasibility / suggestions / summary.
@@ -113,8 +113,8 @@ def assist_report(project_type: str, purpose: str, file_summaries: list[dict]) -
     )
     user_prompt = (
         "以下はユーザのプロジェクト情報です。\n"
-        f"- プロジェクトタイプ: {project_type}\n"
-        f"- 目的: {purpose or '(未記入)'}\n"
+        f"- プロジェクト: {project_label}\n"
+        f"- 目的: {goal or '(未記入)'}\n"
         f"- ファイル概要: {json.dumps(file_summaries, ensure_ascii=False)}\n\n"
         "次の JSON フォーマットだけを返してください（他の文章は禁止）:\n"
         "{\n"

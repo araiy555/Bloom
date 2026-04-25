@@ -23,9 +23,9 @@ export default function HomePage() {
 
         <section className="grid sm:grid-cols-3 gap-4 mt-16">
           {[
-            { icon: "📥", title: "アップロード", desc: "画像・PDF・Excel・テキストをそのまま投入。" },
-            { icon: "🎯", title: "目的を選ぶ", desc: "漫画 / Excel / 営業 / その他 から用途を選択。" },
-            { icon: "💬", title: "すぐに使う", desc: "チャットで自分のAIに話しかけて活用。" },
+            { icon: "💬", title: "話す", desc: "AIアシスタントが「何を作りたい？」と聞いてきます。" },
+            { icon: "📥", title: "渡す", desc: "頼まれたデータを画面にドラッグ＆ドロップ。" },
+            { icon: "🌱", title: "育つ", desc: "あなた専用のAIが完成。チャットで使い続けられます。" },
           ].map((f) => (
             <div key={f.title} className="card text-center">
               <div className="text-3xl mb-2" aria-hidden>{f.icon}</div>
